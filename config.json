@@ -1,0 +1,39 @@
+{
+  "refreshSeconds": 5,
+  "domesticGold": {
+    "secid": "113.Au99.99",
+    "fxSecid": "119.USDCNY",
+    "fallbackUsdCny": 7.25
+  },
+  "watchlist": [
+    {
+      "group": "A股指数",
+      "items": [
+        { "name": "上证指数", "code": "s_sh000001" },
+        { "name": "深证成指", "code": "s_sz399001" },
+        { "name": "创业板指", "code": "s_sz399006" }
+      ]
+    },
+    {
+      "group": "港股",
+      "items": [
+        { "name": "恒生指数", "code": "s_r_hkHSI" }
+      ]
+    },
+    {
+      "group": "现货黄金",
+      "items": [
+        { "name": "国际金价(伦敦金)", "code": "hf_XAU", "type": "intl_gold" },
+        { "name": "国内金价(上金所)", "code": "113.Au99.99", "type": "domestic_gold" }
+      ]
+    },
+    {
+      "group": "自选股",
+      "items": [
+        { "name": "贵州茅台", "code": "s_sh600519" },
+        { "name": "腾讯控股", "code": "s_r_hk00700" },
+        { "name": "比亚迪", "code": "s_sz002594" }
+      ]
+    }
+  ]
+}

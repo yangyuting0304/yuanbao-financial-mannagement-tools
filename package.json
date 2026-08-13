@@ -1,0 +1,14 @@
+{
+  "name": "moyu-licai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "摸鱼理财 - 上班盯盘小窗 (A股 / 港股 / 现货黄金)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test-datafeed.js"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

@@ -1,0 +1,26 @@
+# 依赖目录
+node_modules/
+
+# 个人/工作区配置（含记忆、技能、本地状态）
+.workbuddy/
+
+# 日志与临时文件
+server.log
+nul
+*.log
+
+# 打包/归档文件
+元宝爱财-归档.zip
+元宝爱财-阿里云部署包.zip
+上传版/
+
+# 测试截图与临时输出
+test-screenshots/
+
+# 环境变量（如有）
+.env
+.env.local
+
+# 空的 cookie 临时文件
+2000
+300
