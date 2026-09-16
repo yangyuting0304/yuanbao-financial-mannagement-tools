@@ -69,9 +69,9 @@
     #app { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; box-shadow: none; }
     #bar { padding: 8px 14px !important; }
     .grp-title { font-size: 11.5px !important; padding: 6px 0 4px !important; }
-    /* 名称列自适应宽（JS 写入 --name-w），数字三列收紧，中间让给走势线 */
+    /* 列宽全部设备自适应（JS 实测），中间让给走势线 */
     .row {
-      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(36px, 1fr) 50px 42px 42px !important;
+      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(36px, 1fr) var(--price-w, 52px) var(--chgval-w, 42px) var(--chgpct-w, 42px) !important;
       gap: 4px 5px !important;
       padding: 6px 10px !important;
       margin-bottom: 3px !important;
@@ -90,7 +90,7 @@
     #bar .title { font-size: 13px !important; }
     #body { padding: 5px 9px 0 !important; }
     .row {
-      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(32px, 1fr) 48px 40px 40px !important;
+      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(32px, 1fr) var(--price-w, 48px) var(--chgval-w, 40px) var(--chgpct-w, 40px) !important;
       gap: 3px 5px !important;
       padding: 5px 8px !important;
       margin-bottom: 2px !important;
@@ -227,10 +227,10 @@
   .grp-title .grp-edit:hover { background: var(--accent-soft); }
   .grp-title .grp-edit.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  /* 数据行 —— 扁平列表（五列：名称[自适应宽] | 当日走势线 | 价格[主] | 涨跌数值 | 涨跌幅%）
-     名称列宽由 JS fitNameColumn() 按最宽名称实测写入 --name-w（上限 84px，超长折行不截断） */
+  /* 数据行 —— 扁平列表（五列：名称 | 当日走势线 | 价格[主] | 涨跌数值 | 涨跌幅%）
+     列宽由 JS fitColumns() 实测写入 --name-w / --price-w / --chgval-w / --chgpct-w（设备自适应，防数字叠加） */
   .row {
-    display: grid; grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(40px, 1fr) 52px 42px 42px;
+    display: grid; grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(40px, 1fr) var(--price-w, 54px) var(--chgval-w, 44px) var(--chgpct-w, 44px);
     gap: 4px 5px; align-items: center;
     padding: 6px 8px;
     border-bottom: 1px solid var(--sep);
@@ -1602,8 +1602,8 @@ function render(rawTencent, domGold) {
   // ===== 普通行：双击打开详情弹窗 =====
   attachRowClick();
 
-  // ===== 名称列自适应：贴紧最长名称，消除名称与走势线之间的大片空白 =====
-  fitNameColumn();
+  // ===== 列宽自适应：名称贴紧最长名，数字列按最宽内容定宽（防手机大字号下数字叠加） =====
+  fitColumns();
 
   // ===== 价格提醒检查（在每次行情刷新渲染后执行） =====
   checkAlerts(rawTencent);
@@ -1612,20 +1612,35 @@ function render(rawTencent, domGold) {
 /* ===================== 名称列自适应宽 ===================== */
 /** 量出最宽的 .nm-text，把列宽写进 #app 的 --name-w（所有行共用 → 走势线保持纵向对齐）。
  *  超过上限(84px)的长名加 .nm-wrap 折行显示 —— 完整不截断，代价是那一行略高。 */
-function fitNameColumn() {
+function fitColumns() {
   const app = document.getElementById("app");
   if (!app) return;
+  /* ---- 名称列：最宽名称 + 6px（上限 84px，超长折行不截断） ---- */
   const texts = document.querySelectorAll("#body .row .name .nm-text");
-  const CAP = 84;
+  const NAME_CAP = 84;
   texts.forEach(el => el.classList.remove("nm-wrap"));
   let maxW = 0, hasLong = false;
   texts.forEach(el => {
     const w = el.offsetWidth || 0;
-    if (w > CAP - 2) hasLong = true;      // 折行后宽度会等于列宽，量不准，只记标记
+    if (w > NAME_CAP - 2) hasLong = true; // 折行后宽度会等于列宽，量不准，只记标记
     else if (w > maxW) maxW = w;
   });
-  texts.forEach(el => { if ((el.offsetWidth || 0) > CAP - 2) el.classList.add("nm-wrap"); });
-  app.style.setProperty("--name-w", (hasLong ? CAP : Math.min(CAP, maxW + 6)) + "px");
+  texts.forEach(el => { if ((el.offsetWidth || 0) > NAME_CAP - 2) el.classList.add("nm-wrap"); });
+  app.style.setProperty("--name-w", (hasLong ? NAME_CAP : Math.min(NAME_CAP, maxW + 6)) + "px");
+  /* ---- 数字三列：按全表最宽内容实测定宽 ----
+     手机字号比桌面大，固定列宽会被 7~8 位的数（13476.85 / +188.88）撑爆导致数字互相叠加；
+     在设备上现量现用（scrollWidth 含溢出部分），任何字号/机型都不会打架。 */
+  const numCol = (sel, fallback) => {
+    let m = 0;
+    document.querySelectorAll("#body .row " + sel).forEach(el => {
+      const w = Math.max(el.scrollWidth || 0, el.offsetWidth || 0);
+      if (w > m) m = w;
+    });
+    return (m ? Math.ceil(m) + 4 : fallback) + "px";
+  };
+  app.style.setProperty("--price-w", numCol(".price", 54));
+  app.style.setProperty("--chgval-w", numCol(".chg-val", 44));
+  app.style.setProperty("--chgpct-w", numCol(".chg-pct", 44));
 }
 
 /* ===================== 价格提醒：阈值检查 ===================== */
