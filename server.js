@@ -721,6 +721,92 @@ async function handleTrends(req, res, query) {
   }
 }
 
+/** GET /api/mini?codes=s_sh601138,s_sz000063,... → 批量「当日分时迷你走势」（自选股行内趋势线）
+ *  数据源：腾讯 ifzq appstock/minute/query（与详情弹窗分时同源）
+ *  注意：该接口 **不支持批量**（逗号会返回 code param error）→ 服务端并发拉取 + TTL 缓存聚合
+ *  返回 data: { "s_sh601138": { p:[降采样价格≤60点], n:原始分钟数, t1:"1028" }, ... }
+ *  取不到的标的（如黄金 hf_GC）不会出现在 data 里，前端该格留空即可。 */
+const MINI_CACHE = new Map();        // code -> { ts, payload|null }（null 也缓存，避免反复重试）
+const MINI_TTL = 25000;              // 25s，短于前端 30s 轮询
+const MINI_MAXP = 60;                // 迷你走势线最多 60 点（宽 60~70px 足够）
+
+/** 前端代码 → 腾讯分钟接口代码：s_sh601138→sh601138 / s_r_hk00700→hk00700 / s_r_hkHSI→hkHSI */
+function miniCode(code) {
+  let m;
+  if ((m = /^s_sh(\d{6})$/.exec(code))) return "sh" + m[1];
+  if ((m = /^s_sz(\d{6})$/.exec(code))) return "sz" + m[1];
+  if ((m = /^s_r_hk0*(\d{4,5})$/.exec(code))) return "hk" + m[1].padStart(5, "0");
+  if (code === "s_r_hkHSI") return "hkHSI";
+  return null;
+}
+
+/** 并发受限 map：避免一次打出 30+ 请求被腾讯频控 */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  const worker = async () => {
+    for (;;) {
+      const idx = i++;
+      if (idx >= items.length) return;
+      out[idx] = await fn(items[idx]);
+    }
+  };
+  const n = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: n }, worker));
+  return out;
+}
+
+/** 拉单只标的的分钟价序列；失败/不支持返回 null */
+async function fetchMiniOne(code) {
+  const tc = miniCode(code);
+  if (!tc) return null;
+  const r = await fetchGet(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tc}`, TENCENT_HEADERS);
+  const j = JSON.parse(r.body.toString("utf-8"));
+  const node = j && j.data && j.data[tc];
+  const arr = node && node.data && node.data.data;
+  if (!Array.isArray(arr) || arr.length < 2) return null;
+  // 每行 "HHMM 价格 累计手 累计额"
+  let p = arr.map(line => parseFloat(line.split(/\s+/)[1])).filter(v => isFinite(v));
+  if (p.length < 2) return null;
+  const n = p.length;
+  const t1 = String(arr[arr.length - 1].split(/\s+/)[0] || "");
+  // 等间隔降采样（保留首末点），把传输量压到 ~1/4
+  if (p.length > MINI_MAXP) {
+    const step = (p.length - 1) / (MINI_MAXP - 1);
+    const ds = [];
+    for (let k = 0; k < MINI_MAXP; k++) ds.push(p[Math.round(k * step)]);
+    p = ds;
+  }
+  return { p, n, t1 };
+}
+
+async function handleMini(req, res, query) {
+  const codes = String(query.codes || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 80);
+  if (!codes.length) { sendJsonOrJsonp(req, res, query, 400, { ok: false, error: "缺少codes" }); return; }
+  const now = Date.now();
+  const data = {};
+  const need = [];
+  codes.forEach(c => {
+    const hit = MINI_CACHE.get(c);
+    if (hit && now - hit.ts < MINI_TTL) { if (hit.payload) data[c] = hit.payload; }
+    else need.push(c);
+  });
+  if (need.length) {
+    try {
+      const rs = await mapLimit(need, 6, async (c) => {
+        try { return [c, await fetchMiniOne(c)]; } catch (_) { return [c, null]; }
+      });
+      rs.forEach(([c, v]) => {
+        MINI_CACHE.set(c, { ts: Date.now(), payload: v });
+        if (v) data[c] = v;
+      });
+    } catch (e) {
+      console.error("[/api/mini]", e.message);
+    }
+  }
+  sendJsonOrJsonp(req, res, query, 200, { ok: true, data });
+}
+
 // ============================================================
 //  K线数据（腾讯 fqkline/get，前复权，日/周/月）
 //  URL: https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz000063,day,,,60,qfq
@@ -1307,6 +1393,9 @@ const server = http.createServer(async (req, res) => {
 
     // API: 当日分时（东方财富 trends2），供详情弹窗的 canvas 分时图
     if (parsed.pathname === "/api/trends") { await handleTrends(req, res, parsed.query); return; }
+
+    // API: 批量当日分时迷你走势（自选股列表行内趋势线，服务端并发聚合 + 缓存）
+    if (parsed.pathname === "/api/mini") { await handleMini(req, res, parsed.query); return; }
 
     // API: K线（日/周/月），供详情弹窗的蜡烛图
     if (parsed.pathname === "/api/kline") { await handleKline(req, res, parsed.query); return; }

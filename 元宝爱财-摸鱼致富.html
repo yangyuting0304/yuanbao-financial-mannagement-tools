@@ -69,18 +69,17 @@
     #app { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; box-shadow: none; }
     #bar { padding: 8px 14px !important; }
     .grp-title { font-size: 11.5px !important; padding: 6px 0 4px !important; }
-    /* 名称列弹性1fr自动吃满，数字三列加宽留呼吸感 */
+    /* 名称列弹性，数字三列加宽留呼吸感，中间让给走势线 */
     .row {
-      grid-template-columns: minmax(82px, 1fr) 72px 52px 50px !important;
-      gap: 4px 8px !important;
+      grid-template-columns: minmax(82px, 108px) minmax(38px, 1fr) 52px 44px 44px !important;
+      gap: 4px 5px !important;
       padding: 6px 10px !important;
       margin-bottom: 3px !important;
     }
     .row .price { font-size: clamp(13px, 3.8vw, 15px) !important; }
     .row .chg-val, .row .chg-pct { font-size: clamp(10.5px, 3vw, 12px) !important; }
-    .row .name { gap: 2px 7px !important; }
-    /* 手机端：代码紧跟名称 */
-    .row .name .nm-text { font-size: clamp(12.5px, 3.5vw, 14px) !important; margin-right: 0 !important; }
+    .row .name { gap: 0 !important; }
+    .row .name .nm-text { font-size: clamp(12.5px, 3.5vw, 14px) !important; }
     #body { padding: 6px 10px 0 !important; }
   }
   /* 超窄屏（iPhone SE / 小屏安卓）：适度缩放，保持舒适 */
@@ -91,14 +90,15 @@
     #bar .title { font-size: 13px !important; }
     #body { padding: 5px 9px 0 !important; }
     .row {
-      grid-template-columns: minmax(76px, 1fr) 64px 48px 44px !important;
-      gap: 3px 6px !important;
+      grid-template-columns: minmax(74px, 108px) minmax(34px, 1fr) 50px 42px 42px !important;
+      gap: 3px 5px !important;
       padding: 5px 8px !important;
       margin-bottom: 2px !important;
     }
     .row .price { font-size: 12.5px !important; }
     .row .chg-val, .row .chg-pct { font-size: 10px !important; }
-    .row .name .nm-text { font-size: 12px !important; margin-right: 0 !important; }
+    .row .name .nm-text { font-size: 12px !important; }
+    .row .spark, .row .spark svg { height: 20px !important; }
   }
 
   /* ===== 标题栏 —— 元宝头像 + 名字（扁平 · iOS 导航栏风） ===== */
@@ -227,11 +227,11 @@
   .grp-title .grp-edit:hover { background: var(--accent-soft); }
   .grp-title .grp-edit.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  /* 数据行 —— 扁平列表（四列：名称 | 价格[主] | 涨跌数值 | 涨跌幅%） */
+  /* 数据行 —— 扁平列表（五列：名称[名称+代码两行] | 当日走势线 | 价格[主] | 涨跌数值 | 涨跌幅%） */
   .row {
-    display: grid; grid-template-columns: minmax(100px, 108px) 72px 52px 48px;
+    display: grid; grid-template-columns: minmax(96px, 108px) minmax(40px, 1fr) 54px 44px 44px;
     gap: 4px 6px; align-items: center;
-    padding: 7px 8px;
+    padding: 6px 8px;
     border-bottom: 1px solid var(--sep);
     transition: background 0.12s ease;
   }
@@ -241,9 +241,10 @@
   .row.row-watch {
     cursor: grab;
     position: relative;
-    padding-right: 22px;       /* 预留 × 空间，价格/涨跌不再被挤偏 */
     user-select: none;         /* 拖拽时禁止选中文字（仅桌面拖拽用，不影响手机滚动） */
   }
+  /* × 删除按钮只在编辑模式出现 → 仅编辑态预留它的空间；平时把这 14px 让给走势线 */
+  #app.watch-edit .row.row-watch { padding-right: 22px; }
   .row.row-watch:active {
     cursor: grabbing;
   }
@@ -271,22 +272,31 @@
   /* 插入位置指示线（金色，inset 不占布局空间，避免抖动） */
   .row.row-watch.drag-before { box-shadow: inset 0 2px 0 0 var(--gold) !important; }
   .row.row-watch.drag-after  { box-shadow: inset 0 -2px 0 0 var(--gold) !important; }
+  /* 名称列：第一行=名称，第二行=代码/副标题（深灰淡显） */
   .row .name {
     color: var(--txt); font-weight: 600; font-size: 12px;
-    display: flex; flex-wrap: nowrap; align-items: center; gap: 2px 6px;
-    min-width: 0; overflow: visible;
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 0; min-width: 0; overflow: visible; line-height: 1.2;
   }
   .row .name .nm-text {
     white-space: nowrap;
     min-width: 0; flex-shrink: 0;
-    margin-right: auto;        /* 名称靠左，代码被推到名称列右端，右端对齐 */
   }
-  .row .name small { color: var(--sub); font-size: 9.5px; margin-left: 2px; font-weight: 400;
-    flex-shrink: 0; white-space: nowrap; }
-  .row .name .mini-code { color: var(--sub); font-size: 9px; margin-left: 8px;
+  /* 第二行：代码 + 副标题 横向排列 */
+  .row .name .nm-sub {
+    display: flex; align-items: center; gap: 5px;
+    min-width: 0; white-space: nowrap;
+  }
+  .row .name small { color: var(--sub); font-size: 9px; margin-left: 0; font-weight: 400;
+    flex-shrink: 0; white-space: nowrap; opacity: 0.68; line-height: 1.1; }
+  .row .name .mini-code { color: var(--sub); font-size: 9px; margin-left: 0;
     font-family: Consolas, "Courier New", monospace;
-    background: var(--hover); padding: 1px 4px; border-radius: 3px;
-    opacity: 0.85; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap; }
+    background: none; padding: 0; border-radius: 0;
+    opacity: 0.68; letter-spacing: 0.3px; flex-shrink: 0; white-space: nowrap;
+    font-weight: 400; line-height: 1.1; }
+  /* 行内「当日走势」迷你线：实线=当日已走走势，虚线=昨收基准线 */
+  .row .spark { display: block; width: 100%; min-width: 0; height: 22px; }
+  .row .spark svg { display: block; width: 100%; height: 22px; overflow: visible; }
   .row .price {
     font-variant-numeric: tabular-nums; font-weight: 800;
     text-align: right; font-size: 13px;
@@ -1380,6 +1390,69 @@ function miniCode(tencentCode) {
   return '';
 }
 
+/* ===================== 行内「当日走势」迷你线 ===================== */
+let SPARK = {};                 // code -> { p:[降采样价格], n:原始点数, t1:"1028" }
+let lastRenderArgs = null;      // 最近一次 render 的入参，走势线数据到货后据此重绘
+let sparkTimer = null;          // 走势线独立定时器（30s）
+
+/** 是否港股（H 股午后交易到 16:00，全天 330 分钟；A股 240 分钟） */
+function isHkCode(code) { return /^s_r_hk/.test(code || ""); }
+
+/** 由 "HHMM" 求当日交易时段已走完的比例 0~1（把走势线按真实时间轴铺开） */
+function sessionFrac(hhmm, hk) {
+  const v = parseInt(hhmm, 10);
+  if (!isFinite(v) || v <= 0) return 1;            // 拿不到时间就按整天铺满
+  const cur = Math.floor(v / 100) * 60 + (v % 100);
+  const amS = 570, amE = hk ? 720 : 690;           // 09:30 → 11:30 / 12:00
+  const pmS = 780, pmE = hk ? 960 : 900;           // 13:00 → 15:00 / 16:00
+  const total = (amE - amS) + (pmE - pmS);
+  if (cur <= amS) return 0;
+  if (cur <= amE) return (cur - amS) / total;
+  if (cur <  pmS) return (amE - amS) / total;
+  if (cur <= pmE) return ((amE - amS) + (cur - pmS)) / total;
+  return 1;
+}
+
+/** 走势线 SVG 主体：按昨收对称缩放（昨收基准线居中），实线铺到当前时刻、基准虚线横贯全宽 */
+function sparkSvgInner(code, price, chg) {
+  const d = SPARK[code];
+  if (!d || !Array.isArray(d.p) || d.p.length < 2) return "";
+  if (chg == null || !isFinite(price) || !isFinite(chg)) return "";
+  const base = price - chg;                        // 昨收：与行内涨跌额同源，天然一致
+  if (!(base > 0)) return "";
+  const p = d.p;
+  let dev = 0;
+  for (let i = 0; i < p.length; i++) { const v = Math.abs(p[i] - base); if (v > dev) dev = v; }
+  if (dev <= 0) dev = base * 0.002;                // 全天几乎不动：给个极小量程，避免除 0
+  const W = 100, H = 24, mid = H / 2, half = H / 2 - 1.5;
+  const xEnd = Math.max(3, Math.min(W, sessionFrac(d.t1, isHkCode(code)) * W));
+  const pts = p.map((v, i) => {
+    const x = (i / (p.length - 1)) * xEnd;
+    const y = mid - ((v - base) / dev) * half;
+    return x.toFixed(1) + "," + y.toFixed(1);
+  }).join(" ");
+  const color = chg >= 0 ? "#E05252" : "#2A9D4A";  // 图表惯例：涨红跌绿（与 K线/资金流 一致）
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<line x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '" stroke="' + color + '" stroke-opacity="0.38"' +
+      ' stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.3"' +
+      ' stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+    '</svg>';
+}
+
+/** 走势线单元格：**始终**输出 .spark 占位，保证五行网格对齐（无数据时留空） */
+function sparkCellHtml(code, price, chg) {
+  return '<span class="spark">' + sparkSvgInner(code, price, chg) + '</span>';
+}
+
+/* 名称列第二行：代码 + 副标题（深灰淡显） */
+function subLineHtml(item) {
+  const codeTag = item.code ? miniCode(item.code) : '';
+  const sub = item.sub ? '<small>' + item.sub + '</small>' : '';
+  if (!codeTag && !sub) return '';
+  return '<span class="nm-sub">' + codeTag + sub + '</span>';
+}
+
 function rowHtml(item) {
   const isEst = item.chg == null;
   const cc = isEst ? "flat" : colorClass(item.chg);
@@ -1390,11 +1463,10 @@ function rowHtml(item) {
   const chgPctHtml = isEst
     ? '<span class="chg-pct flat">—</span>'
     : '<span class="chg-pct ' + cc + '">' + sign + fmt(item.pct) + '%</span>';
-  const sub = item.sub ? '<small>' + item.sub + '</small>' : '';
-  const codeTag = item.code ? miniCode(item.code) : '';
   const dcode = item.code ? ' data-code="' + item.code + '"' : '';
   return '<div class="row"' + dcode + '>' +
-    '<span class="name"><span class="nm-text">' + item.name + '</span>' + codeTag + sub + '</span>' +
+    '<span class="name"><span class="nm-text">' + item.name + '</span>' + subLineHtml(item) + '</span>' +
+    sparkCellHtml(item.code, item.price, item.chg) +
     '<span class="price ' + cc + '">' + item.price.toFixed(2) + '</span>' +
     chgValHtml + chgPctHtml +
     '</div>';
@@ -1411,9 +1483,9 @@ function watchRowHtml(item, index) {
   const chgPctHtml = isEst
     ? '<span class="chg-pct flat">—</span>'
     : '<span class="chg-pct ' + cc + '">' + sign + fmt(item.pct) + '%</span>';
-  const codeTag = item.code ? miniCode(item.code) : '';
   return '<div class="row row-watch" draggable="true" data-watch-code="' + item.code + '" data-watch-index="' + index + '">' +
-    '<span class="name"><span class="nm-text">' + item.name + '</span>' + codeTag + '</span>' +
+    '<span class="name"><span class="nm-text">' + item.name + '</span>' + subLineHtml(item) + '</span>' +
+    sparkCellHtml(item.code, item.price, item.chg) +
     '<span class="price ' + cc + '">' + item.price.toFixed(2) + '</span>' +
     chgValHtml + chgPctHtml +
     '<button class="del-btn" title="移除「' + item.name + '」" data-del-code="' + item.code + '"><svg class="ic" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
@@ -1421,6 +1493,8 @@ function watchRowHtml(item, index) {
 }
 
 function render(rawTencent, domGold) {
+  // 记下入参：走势线是独立节奏（30s）拉取的，到货后需据此重绘
+  lastRenderArgs = { raw: rawTencent, domGold: domGold };
   const body = document.getElementById("body");
   let html = "";
 
@@ -1459,8 +1533,10 @@ function render(rawTencent, domGold) {
   } else if (domGold) {
     html += rowHtml({ name: domGold.name || CFG.gold.domName, sub: "招行积存金", price: domGold.price, chg: domGold.chg, pct: domGold.pct, code: "domGold" });
   } else {
-    html += '<div class="row" data-code="domGold"><span class="name">' + CFG.gold.domName +
-            '<small>' + CFG.gold.domSub + '</small></span>' +
+    html += '<div class="row" data-code="domGold">' +
+            '<span class="name"><span class="nm-text">' + CFG.gold.domName + '</span>' +
+            '<span class="nm-sub"><small>' + CFG.gold.domSub + '</small></span></span>' +
+            sparkCellHtml("domGold", 0, 0) +
             '<span class="price flat">—</span><span class="chg-val flat">—</span><span class="chg-pct flat">获取中...</span></div>';
   }
 
@@ -3231,10 +3307,28 @@ function refresh() {
     tryNext(1); // 从Step1开始
   });
 }
+/* 走势线：独立 30s 节奏（不挤进 5s 行情心跳；服务端另有 25s 缓存兜底频控） */
+function fetchSparklines() {
+  const codes = [];
+  CFG.aIndices.forEach(i => codes.push(i.code));
+  CFG.hkIndices.forEach(i => codes.push(i.code));
+  if (CFG.watch) CFG.watch.forEach(i => codes.push(i.code));
+  if (!codes.length) return;
+  const url = apiBase() + "/api/mini?codes=" + encodeURIComponent(codes.join(","));
+  jsonpOrFetch(url, 20000).then(j => {
+    if (!j || !j.ok || !j.data) return;
+    SPARK = j.data;
+    if (lastRenderArgs) render(lastRenderArgs.raw, lastRenderArgs.domGold);
+  }).catch(() => { /* server 未启动 / file:// 模式：走势线留空，不影响其它数据 */ });
+}
+
 function startTimer() {
   if (timer) clearInterval(timer);
   timer = setInterval(refresh, CFG.refreshMs);
   refresh();
+  if (sparkTimer) clearInterval(sparkTimer);
+  sparkTimer = setInterval(fetchSparklines, 30000);
+  fetchSparklines();
 }
 
 /* ===================== 时钟 ===================== */
