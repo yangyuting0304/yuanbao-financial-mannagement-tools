@@ -1372,9 +1372,14 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // 主页
+    //   Cache-Control: no-cache —— 每次都向服务器协商校验（配合 Last-Modified 304），
+    //   避免浏览器启发式缓存拿到旧版 HTML（单文件应用发版后旧页面会长期驻留）
     if (parsed.pathname === "/" || parsed.pathname === "/index.html") {
       const html = fs.readFileSync(HTML_FILE, "utf-8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache"
+      });
       res.end(html);
       return;
     }
