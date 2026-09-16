@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 分享卡片（微信/QQ/钉钉）：缩略图必须公网可访问的绝对地址（base64 内联图爬虫抓不到） -->
+<meta property="og:title" content="元宝爱财 · 摸鱼盯盘">
+<meta property="og:description" content="上班摸鱼 · 财运喵喵 —— A股/港股/黄金实时盯盘小窗">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yangyuting.cloud/yuanbao/">
+<meta property="og:image" content="https://yangyuting.cloud/yuanbao/jinyuanbao.jpg">
+<meta property="og:image:width" content="600">
+<meta property="og:image:height" content="600">
 <title>元宝爱财 · 摸鱼盯盘</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -814,6 +822,9 @@
 </style>
 </head>
 <body>
+<!-- 分享兜底：微信爬虫有时取页面第一张 <img> 而非 og:image，隐藏一张公网可访问的缩略图 -->
+<img src="https://yangyuting.cloud/yuanbao/jinyuanbao.jpg" alt="" aria-hidden="true"
+     style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:none;">
 <div id="app">
   <!-- 标题栏：元宝头像 + 名字 -->
   <div id="bar">

@@ -1415,11 +1415,15 @@ const server = http.createServer(async (req, res) => {
     if (parsed.pathname === "/api/jin10/news/detail") { await handleJin10NewsDetail(req, res, parsed.query); return; }
     if (parsed.pathname === "/api/jin10/calendar") { await handleJin10Calendar(req, res, parsed.query); return; }
 
-    // 静态资源
-    if (parsed.pathname === "/yuanbao.jpg") {
-      const imgPath = path.join(__dirname, "yuanbao.jpg");
+    // 静态资源（白名单：分享缩略图/头像，文件位于 __dirname 下）
+    const STATIC_IMAGES = {
+      "/yuanbao.jpg": "yuanbao.jpg",
+      "/jinyuanbao.jpg": "jinyuanbao.jpg"   // 微信/QQ 分享卡片缩略图（og:image 指向它）
+    };
+    if (STATIC_IMAGES[parsed.pathname]) {
+      const imgPath = path.join(__dirname, STATIC_IMAGES[parsed.pathname]);
       if (fs.existsSync(imgPath)) {
-        res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=3600" });
+        res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=86400" });
         res.end(fs.readFileSync(imgPath));
         return;
       }
