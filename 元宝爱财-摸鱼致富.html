@@ -972,6 +972,12 @@ const DEFAULT_CONFIG = {
     { code: "s_sz300394", name: "天孚通信" },
     { code: "s_sh603986", name: "兆易创新" },
     { code: "s_sh688826", name: "频准激光" },
+    /* === 用户 2026-09-16 新增（永久默认收录，代码已经腾讯接口核验） === */
+    { code: "s_sz002463", name: "沪电股份" },
+    { code: "s_sz002475", name: "立讯精密" },
+    { code: "s_sh600703", name: "三安光电" },
+    { code: "s_sz002600", name: "领益智造" },
+    { code: "s_sh688036", name: "传音控股" },
     /* === A股 沪市 === */
     { code: "s_sh603876", name: "鼎胜新材" },
     { code: "s_sh600522", name: "中天科技" },
@@ -1060,11 +1066,18 @@ function saveAlerts() { try { localStorage.setItem(ALERTS_KEY, JSON.stringify(al
     { code: "s_sz002975", name: "博杰股份" },
     { code: "s_sz300394", name: "天孚通信" },
     { code: "s_sh603986", name: "兆易创新" },
-    { code: "s_sh688826", name: "频准激光" }
+    { code: "s_sh688826", name: "频准激光" },
+    /* === 用户 2026-09-16 新增（兜底合并） === */
+    { code: "s_sz002463", name: "沪电股份" },
+    { code: "s_sz002475", name: "立讯精密" },
+    { code: "s_sh600703", name: "三安光电" },
+    { code: "s_sz002600", name: "领益智造" },
+    { code: "s_sh688036", name: "传音控股" }
   ];
   CFG.watch = CFG.watch || [];
   let added = 0;
-  NEW_WATCH.forEach(w => {
+  /* 倒序遍历 + unshift 置顶 → 最终自上而下顺序与数组声明顺序一致（正序遍历会整批倒过来） */
+  NEW_WATCH.slice().reverse().forEach(w => {
     if (!CFG.watch.some(x => x.code === w.code)) {
       CFG.watch.unshift(w);   // 置顶，与用户截图"上→下"顺序一致
       added++;
