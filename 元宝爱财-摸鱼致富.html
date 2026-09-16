@@ -269,6 +269,15 @@
     display: none; align-items: center; justify-content: center;
     opacity: 0.45; transition: all 0.15s ease;
   }
+  /* 触屏长按拖拽：禁掉 iOS 长按放大镜/呼出菜单 */
+  .row.row-watch { -webkit-touch-callout: none; }
+  /* 长按拎起后的行（跟手移动） */
+  .row.row-watch.touch-dragging {
+    z-index: 6; opacity: 0.96;
+    background: var(--panel);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.20), 0 2px 6px rgba(0,0,0,0.10);
+    transition: none !important;
+  }
   /* 编辑模式：显示删除按钮（低调小红圈） */
   #app.watch-edit .row .del-btn { display: flex; }
   #app.watch-edit .row:hover .del-btn { opacity: 0.9; }
@@ -1876,6 +1885,103 @@ function removeWatch(code) {
 }
 
 /* 绑定自选股行的删除和拖拽事件 */
+/* ===== 触屏长按拖拽排序（手机端 HTML5 DnD 不触发，必须用 touch 事件实现） ===== */
+let touchDrag = null;        // 触屏拖拽状态
+let suppressRowClick = 0;    // 拖完抑制误触详情弹窗（时间戳）
+const TOUCH_DRAG_MS = 320;   // 长按触发时长
+
+function bindTouchReorderOnce() {
+  if (window.__touchReorderBound) return;
+  window.__touchReorderBound = true;
+
+  function tdFinish(commit) {
+    const st = touchDrag;
+    if (!st) return;
+    clearTimeout(st.timer);
+    st.row.classList.remove("touch-dragging");
+    st.row.style.transform = "";
+    document.querySelectorAll(".row-watch").forEach(r => r.classList.remove("drag-before", "drag-after"));
+    touchDrag = null;
+    // 只有真正进入过拖拽态才抑制点击；普通单击/滚动不能影响点行开详情
+    if (!commit || !st.active) return;
+    suppressRowClick = Date.now();
+    if (st.targetIndex == null || isNaN(st.index) || st.targetIndex === st.index) return;
+    const moved = CFG.watch.splice(st.index, 1)[0];
+    let at = st.targetIndex;
+    if (at < 0) at = 0;
+    if (at > CFG.watch.length) at = CFG.watch.length;
+    CFG.watch.splice(at, 0, moved);
+    saveCfg(CFG);
+    refresh();
+  }
+
+  // 目标插入位 = 手指上方「其他行」的数量；并显示插入指示线
+  function tdCompute(clientY) {
+    const rows = Array.prototype.slice.call(document.querySelectorAll("#body .row-watch"));
+    let before = 0;
+    const others = [];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i] === touchDrag.row) continue;
+      others.push(rows[i]);
+      const rc = rows[i].getBoundingClientRect();
+      if (clientY > rc.top + rc.height / 2) before++;
+    }
+    touchDrag.targetIndex = before;
+    document.querySelectorAll(".row-watch").forEach(r => r.classList.remove("drag-before", "drag-after"));
+    if (others.length) {
+      if (before < others.length) others[before].classList.add("drag-before");
+      else others[others.length - 1].classList.add("drag-after");
+    }
+  }
+
+  document.addEventListener("touchmove", function (e) {
+    if (!touchDrag) return;
+    const t = e.touches[0];
+    if (!touchDrag.active) {
+      touchDrag.curY = t.clientY;
+      // 未长按生效就大幅移动 → 取消，让位给正常滚动
+      if (Math.abs(t.clientX - touchDrag.startX) > 10 || Math.abs(t.clientY - touchDrag.startY) > 10) {
+        clearTimeout(touchDrag.timer);
+        touchDrag = null;
+      }
+      return;
+    }
+    e.preventDefault();                     // 拖拽中禁止页面滚动
+    const bodyEl = document.getElementById("body");
+    // 行跟手（补偿拖拽期间的列表自动滚动）
+    const dy = (t.clientY - touchDrag.liftY) + (bodyEl.scrollTop - touchDrag.scroll0);
+    touchDrag.row.style.transform = "translateY(" + dy + "px)";
+    tdCompute(t.clientY);
+    // 接近上下边缘 → 自动滚动
+    const br = bodyEl.getBoundingClientRect();
+    if (t.clientY < br.top + 48) bodyEl.scrollTop -= 9;
+    else if (t.clientY > br.bottom - 48) bodyEl.scrollTop += 9;
+  }, { passive: false });
+
+  document.addEventListener("touchend", function () { tdFinish(true); });
+  document.addEventListener("touchcancel", function () { tdFinish(false); });
+}
+
+function onTouchRowStart(e) {
+  if (e.touches.length !== 1) return;
+  const row = e.currentTarget;
+  const t = e.touches[0];
+  touchDrag = {
+    row,
+    index: parseInt(row.getAttribute("data-watch-index"), 10),
+    startX: t.clientX, startY: t.clientY, curY: t.clientY, liftY: t.clientY,
+    active: false, targetIndex: null, scroll0: 0,
+    timer: setTimeout(function () {
+      if (!touchDrag) return;
+      touchDrag.active = true;
+      touchDrag.liftY = touchDrag.curY;     // 以长按生效瞬间的手指位置为跟手原点
+      touchDrag.scroll0 = document.getElementById("body").scrollTop;
+      touchDrag.row.classList.add("touch-dragging");
+      if (navigator.vibrate) { try { navigator.vibrate(30); } catch (_) {} }
+    }, TOUCH_DRAG_MS)
+  };
+}
+
 function bindWatchInteractions() {
   // --- 删除按钮 ---
   document.querySelectorAll(".del-btn").forEach(btn => {
@@ -1886,6 +1992,12 @@ function bindWatchInteractions() {
         removeWatch(code);
       }
     };
+  });
+
+  // --- 触屏长按拖拽排序（手机端；桌面 HTML5 DnD 不受影响） ---
+  bindTouchReorderOnce();
+  document.querySelectorAll(".row-watch").forEach(row => {
+    row.addEventListener("touchstart", onTouchRowStart, { passive: true });
   });
 
   // --- HTML5 拖拽排序（带方向判定 + 插入指示线） ---
@@ -2030,6 +2142,8 @@ function attachRowClick() {
     if (row.dataset.clickBound) return;
     row.dataset.clickBound = "1";
     row.onclick = function(e) {
+      // 长按拖拽落位后的误触不打开详情
+      if (Date.now() - suppressRowClick < 500) return;
       // 自选股编辑模式下点击不打开详情（避免误操作）
       if (document.getElementById("app").classList.contains("watch-edit")) return;
       // 如果点中的是删除按钮/拖拽手柄，不触发
