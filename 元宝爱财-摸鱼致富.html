@@ -1630,6 +1630,8 @@ function render(rawTencent, domGold) {
 }
 
 /* ===================== 名称列自适应宽 ===================== */
+/* 数字三列当前列宽缓存（页面加载时重置为兜底值；只在溢出时按缺口扩宽，防增长回路） */
+const NUMW = { price: 0, chgval: 0, chgpct: 0 };
 /** 量出最宽的 .nm-text，把列宽写进 #app 的 --name-w（所有行共用 → 走势线保持纵向对齐）。
  *  超过上限(84px)的长名加 .nm-wrap 折行显示 —— 完整不截断，代价是那一行略高。 */
 function fitColumns() {
@@ -1649,21 +1651,23 @@ function fitColumns() {
   });
   texts.forEach(el => { if ((el.scrollWidth || 0) > NAME_CAP - 2) el.classList.add("nm-wrap"); });
   app.style.setProperty("--name-w", (hasLong ? NAME_CAP : Math.min(NAME_CAP, maxW + 6)) + "px");
-  /* ---- 数字三列：实测定宽 + 上限钳制 ----
-     手机字号偏大或内核异常放大时，scrollWidth 可能虚高；钳制上限防止数字列吃光行宽、
-     把名称列挤塌（minmax(48px,…)+走势线 1fr 也会兜底）。 */
-  const numCol = (sel, fallback, cap) => {
-    let m = 0;
+  /* ---- 数字三列：只在「内容溢出列宽」时才扩宽 ----
+     网格项默认拉伸到列宽 → scrollWidth ≥ 列宽。若把测量值直接写回列宽，
+     每次 render 会净增 4px（增长回路：列越来越宽 → 行溢出 → 最右列被裁出窗口）。
+     因此只检测溢出量 scrollWidth−clientWidth：有溢出才按缺口扩，无溢出保持不动。 */
+  const growCol = (sel, key, fallback, cap) => {
+    let over = 0;
     document.querySelectorAll("#body .row " + sel).forEach(el => {
-      const w = Math.max(el.scrollWidth || 0, el.offsetWidth || 0);
-      if (w > m) m = w;
+      const d2 = (el.scrollWidth || 0) - (el.clientWidth || 0);
+      if (d2 > over) over = d2;
     });
-    if (!m) return fallback + "px";
-    return Math.min(cap, Math.ceil(m) + 4) + "px";
+    if (over > 0) NUMW[key] = Math.min(cap, NUMW[key] + Math.ceil(over) + 4);
+    else if (!NUMW[key]) NUMW[key] = fallback;
+    app.style.setProperty("--" + key + "-w", NUMW[key] + "px");
   };
-  app.style.setProperty("--price-w", numCol(".price", 54, 96));
-  app.style.setProperty("--chgval-w", numCol(".chg-val", 44, 72));
-  app.style.setProperty("--chgpct-w", numCol(".chg-pct", 44, 72));
+  growCol(".price", "price", 54, 96);
+  growCol(".chg-val", "chgval", 44, 72);
+  growCol(".chg-pct", "chgpct", 44, 72);
 }
 
 /* ===================== 价格提醒：阈值检查 ===================== */
