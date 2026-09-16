@@ -30,7 +30,7 @@ if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" set "CHROME=C:\
 if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" set "CHROME=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 
 if defined CHROME (
-  start "" "%CHROME%" --app="%URL%" --window-size=420,760
+  start "" "%CHROME%" --app="%URL%" --window-size=400,760
 ) else (
   start "" "%URL%"
 )

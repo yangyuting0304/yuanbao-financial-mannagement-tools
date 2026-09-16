@@ -51,7 +51,7 @@
   }
   /* ===== 主容器（flex列布局：顶栏固定 + 内容区滚动） ===== */
   #app {
-    width: 356px;
+    width: 340px;   /* 2026-09-16 收窄：名称列自适应 + 数字列收紧，摸鱼小窗更紧凑 */
     max-width: 100vw;
     min-height: 100vh;
     max-height: 100vh;
@@ -69,9 +69,9 @@
     #app { width: 100vw !important; max-width: 100vw !important; border-radius: 0 !important; border: none !important; box-shadow: none; }
     #bar { padding: 8px 14px !important; }
     .grp-title { font-size: 11.5px !important; padding: 6px 0 4px !important; }
-    /* 名称列弹性，数字三列加宽留呼吸感，中间让给走势线 */
+    /* 名称列自适应宽（JS 写入 --name-w），数字三列收紧，中间让给走势线 */
     .row {
-      grid-template-columns: minmax(82px, 108px) minmax(38px, 1fr) 52px 44px 44px !important;
+      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(36px, 1fr) 50px 42px 42px !important;
       gap: 4px 5px !important;
       padding: 6px 10px !important;
       margin-bottom: 3px !important;
@@ -90,7 +90,7 @@
     #bar .title { font-size: 13px !important; }
     #body { padding: 5px 9px 0 !important; }
     .row {
-      grid-template-columns: minmax(74px, 108px) minmax(34px, 1fr) 50px 42px 42px !important;
+      grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(32px, 1fr) 48px 40px 40px !important;
       gap: 3px 5px !important;
       padding: 5px 8px !important;
       margin-bottom: 2px !important;
@@ -227,10 +227,11 @@
   .grp-title .grp-edit:hover { background: var(--accent-soft); }
   .grp-title .grp-edit.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  /* 数据行 —— 扁平列表（五列：名称[名称+代码两行] | 当日走势线 | 价格[主] | 涨跌数值 | 涨跌幅%） */
+  /* 数据行 —— 扁平列表（五列：名称[自适应宽] | 当日走势线 | 价格[主] | 涨跌数值 | 涨跌幅%）
+     名称列宽由 JS fitNameColumn() 按最宽名称实测写入 --name-w（上限 84px，超长折行不截断） */
   .row {
-    display: grid; grid-template-columns: minmax(96px, 108px) minmax(40px, 1fr) 54px 44px 44px;
-    gap: 4px 6px; align-items: center;
+    display: grid; grid-template-columns: minmax(0, var(--name-w, 108px)) minmax(40px, 1fr) 52px 42px 42px;
+    gap: 4px 5px; align-items: center;
     padding: 6px 8px;
     border-bottom: 1px solid var(--sep);
     transition: background 0.12s ease;
@@ -282,6 +283,8 @@
     white-space: nowrap;
     min-width: 0; flex-shrink: 0;
   }
+  /* 超长名称折行（fitNameColumn() 按需加）：完整显示不截断，仅个别长名行会高一点 */
+  .row .name .nm-text.nm-wrap { white-space: normal; line-height: 1.15; }
   /* 第二行：代码 + 副标题 横向排列 */
   .row .name .nm-sub {
     display: flex; align-items: center; gap: 5px;
@@ -1586,8 +1589,30 @@ function render(rawTencent, domGold) {
   // ===== 普通行：双击打开详情弹窗 =====
   attachRowClick();
 
+  // ===== 名称列自适应：贴紧最长名称，消除名称与走势线之间的大片空白 =====
+  fitNameColumn();
+
   // ===== 价格提醒检查（在每次行情刷新渲染后执行） =====
   checkAlerts(rawTencent);
+}
+
+/* ===================== 名称列自适应宽 ===================== */
+/** 量出最宽的 .nm-text，把列宽写进 #app 的 --name-w（所有行共用 → 走势线保持纵向对齐）。
+ *  超过上限(84px)的长名加 .nm-wrap 折行显示 —— 完整不截断，代价是那一行略高。 */
+function fitNameColumn() {
+  const app = document.getElementById("app");
+  if (!app) return;
+  const texts = document.querySelectorAll("#body .row .name .nm-text");
+  const CAP = 84;
+  texts.forEach(el => el.classList.remove("nm-wrap"));
+  let maxW = 0, hasLong = false;
+  texts.forEach(el => {
+    const w = el.offsetWidth || 0;
+    if (w > CAP - 2) hasLong = true;      // 折行后宽度会等于列宽，量不准，只记标记
+    else if (w > maxW) maxW = w;
+  });
+  texts.forEach(el => { if ((el.offsetWidth || 0) > CAP - 2) el.classList.add("nm-wrap"); });
+  app.style.setProperty("--name-w", (hasLong ? CAP : Math.min(CAP, maxW + 6)) + "px");
 }
 
 /* ===================== 价格提醒：阈值检查 ===================== */

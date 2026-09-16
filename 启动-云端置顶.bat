@@ -19,7 +19,7 @@ if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" set "CHROME=C:\
 if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" set "CHROME=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 
 if defined CHROME (
-  start "" "%CHROME%" --app="%URL%" --window-size=420,760
+  start "" "%CHROME%" --app="%URL%" --window-size=400,760
 ) else (
   echo [警告] 未检测到 Chrome，改用系统默认浏览器打开
   start "" "%URL%"
