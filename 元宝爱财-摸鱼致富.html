@@ -1443,7 +1443,9 @@ function sessionFrac(hhmm, hk) {
   return 1;
 }
 
-/** 走势线 SVG 主体：按昨收对称缩放（昨收基准线居中），实线铺到当前时刻、基准虚线横贯全宽 */
+/** 走势线 SVG 主体：按昨收对称缩放（昨收基准线居中）。
+ *  每个点的 x 由「时段内分钟位置」决定（服务端时段锚定采样，含午休修正）→ 点位永固定，
+ *  曲线只向右生长，不会随刷新整条变形。 */
 function sparkSvgInner(code, price, chg) {
   const d = SPARK[code];
   if (!d || !Array.isArray(d.p) || d.p.length < 2) return "";
@@ -1455,17 +1457,21 @@ function sparkSvgInner(code, price, chg) {
   for (let i = 0; i < p.length; i++) { const v = Math.abs(p[i] - base); if (v > dev) dev = v; }
   if (dev <= 0) dev = base * 0.002;                // 全天几乎不动：给个极小量程，避免除 0
   const W = 100, H = 24, mid = H / 2, half = H / 2 - 1.5;
+  const total = d.total || (isHkCode(code) ? 330 : 240);
+  const hasM = Array.isArray(d.m) && d.m.length === p.length;
   const xEnd = Math.max(3, Math.min(W, sessionFrac(d.t1, isHkCode(code)) * W));
-  const pts = p.map((v, i) => {
-    const x = (i / (p.length - 1)) * xEnd;
-    const y = mid - ((v - base) / dev) * half;
-    return x.toFixed(1) + "," + y.toFixed(1);
-  }).join(" ");
+  const pts = [];
+  for (let i = 0; i < p.length; i++) {
+    // 新格式：x = 该点在时段内的分钟位置 / 全时段；旧格式兜底：按点数均分铺到 xEnd
+    const x = hasM ? Math.min(W, (d.m[i] / total) * W) : (i / (p.length - 1)) * xEnd;
+    const y = mid - ((p[i] - base) / dev) * half;
+    pts.push(x.toFixed(1) + "," + y.toFixed(1));
+  }
   const color = chg >= 0 ? "#E05252" : "#2A9D4A";  // 图表惯例：涨红跌绿（与 K线/资金流 一致）
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
       '<line x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '" stroke="' + color + '" stroke-opacity="0.38"' +
       ' stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>' +
-      '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.3"' +
+      '<polyline points="' + pts.join(" ") + '" fill="none" stroke="' + color + '" stroke-width="1.3"' +
       ' stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
     '</svg>';
 }

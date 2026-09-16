@@ -756,7 +756,9 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
-/** 拉单只标的的分钟价序列；失败/不支持返回 null */
+/** 拉单只标的的分钟价序列；失败/不支持返回 null
+ *  采样为「时段锚定」：每个点带交易时段内的分钟位置（含午休修正），
+ *  已返回的点位置永不变化 → 前端曲线只向右生长，不会整条变形（旧版按点数均分，每分钟整条重排）。 */
 async function fetchMiniOne(code) {
   const tc = miniCode(code);
   if (!tc) return null;
@@ -765,19 +767,37 @@ async function fetchMiniOne(code) {
   const node = j && j.data && j.data[tc];
   const arr = node && node.data && node.data.data;
   if (!Array.isArray(arr) || arr.length < 2) return null;
-  // 每行 "HHMM 价格 累计手 累计额"
-  let p = arr.map(line => parseFloat(line.split(/\s+/)[1])).filter(v => isFinite(v));
-  if (p.length < 2) return null;
-  const n = p.length;
-  const t1 = String(arr[arr.length - 1].split(/\s+/)[0] || "");
-  // 等间隔降采样（保留首末点），把传输量压到 ~1/4
-  if (p.length > MINI_MAXP) {
-    const step = (p.length - 1) / (MINI_MAXP - 1);
-    const ds = [];
-    for (let k = 0; k < MINI_MAXP; k++) ds.push(p[Math.round(k * step)]);
-    p = ds;
+  // 每行 "HHMM 价格 累计手 累计额" → [时段内分钟, 价格]
+  const hk = /^hk/.test(tc);
+  const total = hk ? 330 : 240;          // 全时段分钟数（09:30 起算，含午休）
+  const lunchGap = hk ? 60 : 90;         // 午休：HK 12:00→13:00 差 60；A股 11:30→13:00 差 90
+  const seq = [];
+  for (const line of arr) {
+    const f = line.split(/\s+/);
+    const v = parseInt(f[0], 10);
+    const price = parseFloat(f[1]);
+    if (!isFinite(v) || !isFinite(price)) continue;
+    const hm = Math.floor(v / 100) * 60 + (v % 100);
+    let smin = hm - 570;                 // 相对 09:30
+    if (smin < 0) smin = 0;
+    if (hm >= 780) smin -= lunchGap;     // 13:00 起扣掉午休
+    seq.push([smin, price]);
   }
-  return { p, n, t1 };
+  if (seq.length < 2) return null;
+  // 固定槽位采样：每 stride 个时段分钟一个点（A股 stride=4 → 最多 60 槽）
+  const stride = Math.ceil(total / MINI_MAXP);
+  const p = [], m = [];
+  let k = 0;
+  for (let slot = 0; slot * stride <= total && k < seq.length; slot++) {
+    const target = slot * stride;
+    while (k < seq.length && seq[k][0] < target) k++;
+    if (k >= seq.length) break;
+    p.push(seq[k][1]); m.push(seq[k][0]);
+  }
+  // 永远补上最新一分钟，保证线画到"当前时刻"
+  const lastS = seq[seq.length - 1][0];
+  if (m.length === 0 || m[m.length - 1] !== lastS) { p.push(seq[seq.length - 1][1]); m.push(lastS); }
+  return { p, m, total, n: arr.length, t1: String(arr[arr.length - 1].split(/\s+/)[0] || "") };
 }
 
 async function handleMini(req, res, query) {
