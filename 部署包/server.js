@@ -726,8 +726,9 @@ async function handleTrends(req, res, query) {
  *  注意：该接口 **不支持批量**（逗号会返回 code param error）→ 服务端并发拉取 + TTL 缓存聚合
  *  返回 data: { "s_sh601138": { p:[降采样价格≤60点], n:原始分钟数, t1:"1028" }, ... }
  *  取不到的标的（如黄金 hf_GC）不会出现在 data 里，前端该格留空即可。 */
-const MINI_CACHE = new Map();        // code -> { ts, payload|null }（null 也缓存，避免反复重试）
-const MINI_TTL = 25000;              // 25s，短于前端 30s 轮询
+const MINI_CACHE = new Map();        // code -> { ts, payload|null, day }（null 也缓存，避免反复重试）
+const MINI_TTL = 60000;              // 60s（分钟数据本来就一分钟一变，60s 缓存零损失且减半请求量）
+const MINI_STALE_OK = 5 * 60000;     // 上游全挂时，5 分钟内的当日旧数据兜底
 const MINI_MAXP = 60;                // 迷你走势线最多 60 点（宽 60~70px 足够）
 
 /** 前端代码 → 腾讯分钟接口代码：s_sh601138→sh601138 / s_r_hk00700→hk00700 / s_r_hkHSI→hkHSI */
@@ -756,26 +757,13 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
-/** 拉单只标的的分钟价序列；失败/不支持返回 null
- *  采样为「时段锚定」：每个点带交易时段内的分钟位置（含午休修正），
- *  已返回的点位置永不变化 → 前端曲线只向右生长，不会整条变形（旧版按点数均分，每分钟整条重排）。 */
-async function fetchMiniOne(code) {
-  const tc = miniCode(code);
-  if (!tc) return null;
-  const r = await fetchGet(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${tc}`, TENCENT_HEADERS);
-  const j = JSON.parse(r.body.toString("utf-8"));
-  const node = j && j.data && j.data[tc];
-  const arr = node && node.data && node.data.data;
-  if (!Array.isArray(arr) || arr.length < 2) return null;
-  // 每行 "HHMM 价格 累计手 累计额" → [时段内分钟, 价格]
-  const hk = /^hk/.test(tc);
-  const total = hk ? 330 : 240;          // 全时段分钟数（09:30 起算，含午休）
+/** [HHMM原始, 价格] 序列 → 时段锚定结构（含午休修正；点位固定，前端曲线只向右生长） */
+function buildAnchored(rows, hk, total) {
   const lunchGap = hk ? 60 : 90;         // 午休：HK 12:00→13:00 差 60；A股 11:30→13:00 差 90
   const seq = [];
-  for (const line of arr) {
-    const f = line.split(/\s+/);
-    const v = parseInt(f[0], 10);
-    const price = parseFloat(f[1]);
+  for (const r of rows) {
+    const v = parseInt(r[0], 10);
+    const price = r[1];
     if (!isFinite(v) || !isFinite(price)) continue;
     const hm = Math.floor(v / 100) * 60 + (v % 100);
     let smin = hm - 570;                 // 相对 09:30
@@ -797,12 +785,78 @@ async function fetchMiniOne(code) {
   // 永远补上最新一分钟，保证线画到"当前时刻"
   const lastS = seq[seq.length - 1][0];
   if (m.length === 0 || m[m.length - 1] !== lastS) { p.push(seq[seq.length - 1][1]); m.push(lastS); }
-  return { p, m, total, n: arr.length, t1: String(arr[arr.length - 1].split(/\s+/)[0] || "") };
+  const t1 = String(rows[rows.length - 1][0]).replace(/[^0-9]/g, "").slice(0, 4);
+  return { p, m, total, n: seq.length, t1 };
+}
+
+/** 拉单只标的的分钟价序列；失败/不支持返回 null（失败原因写入 diag）
+ *  三源回退：腾讯 ifzq → 腾讯 proxy 域名 → 东方财富 trends2。
+ *  背景：全天 30s 轮询 × 40 只 ≈ 上万次/日，腾讯 WAF 会封服务器 IP（返回 HTML 拦截页），
+ *  多源 + 交易时段保护 + 长缓存把请求量压下来，且被封时自动切源。 */
+async function fetchMiniOne(code, diag) {
+  const tc = miniCode(code);
+  if (!tc) { if (diag) diag[code] = "unsupported"; return null; }
+  const hk = /^hk/.test(tc);
+  const total = hk ? 330 : 240;
+  const secid = hk ? "116." + tc.slice(2).padStart(5, "0")
+                   : (tc.startsWith("sh") ? "1." : "0.") + tc.slice(2);
+  const note = (s) => { if (diag) diag[code] = (diag[code] ? diag[code] + " | " : "") + s; };
+
+  // ---- 源 1/2：腾讯两个域名（同结构同解析；proxy 域名带 /ifzqgtimg 路径前缀）----
+  const tencentUrls = [
+    ["ifzq", "https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=" + tc],
+    ["qqproxy", "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/minute/query?code=" + tc]
+  ];
+  for (const [label, url] of tencentUrls) {
+    try {
+      const r = await fetchGet(url, TENCENT_HEADERS);
+      const j = JSON.parse(r.body.toString("utf-8"));
+      const node = j && j.data && j.data[tc];
+      const arr = node && node.data && node.data.data;
+      if (!Array.isArray(arr) || arr.length < 2) throw new Error("empty");
+      const rows = arr.map(line => { const f = line.split(/\s+/); return [f[0], parseFloat(f[1])]; });
+      const out = buildAnchored(rows, hk, total);
+      if (out) { out.src = label; note("ok:" + label); return out; }
+      throw new Error("parse-empty");
+    } catch (e) {
+      note("fail:" + label + ":" + String((e && e.message) || e).slice(0, 50));
+    }
+  }
+
+  // ---- 源 3：东方财富 trends2（ndays=1；"2026-09-17 09:30,61.90"）----
+  try {
+    const url = `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${secid}&ndays=1&fields1=f1,f2,f3,f4&fields2=f51,f53&iscr=0`;
+    const r = await fetchGet(url, EM_HEADERS);
+    const j = JSON.parse(r.body.toString("utf-8"));
+    const trends = j && j.data && j.data.trends;
+    if (!Array.isArray(trends) || trends.length < 2) throw new Error("empty");
+    const rows = trends.map(line => {
+      const i = line.indexOf(",");
+      return [line.slice(11, 16).replace(":", ""), parseFloat(line.slice(i + 1))];
+    });
+    const out = buildAnchored(rows, hk, total);
+    if (out) { out.src = "em"; note("ok:em"); return out; }
+    throw new Error("parse-empty");
+  } catch (e) {
+    note("fail:em:" + String((e && e.message) || e).slice(0, 50));
+  }
+  return null;
+}
+
+/** 北京时间（固定 UTC+8，与服务器时区无关；用 getUTC* 读出即北京墙上时间） */
+function beijingNow() { return new Date(Date.now() + 480 * 60000); }
+/** 是否交易时段（宽松窗口 09:15–16:15，覆盖 A股+港股）——非时段不打上游，防止夜间/周末无效请求 */
+function inTradingHours() {
+  const d = beijingNow();
+  const min = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return min >= 555 && min <= 975;
 }
 
 async function handleMini(req, res, query) {
   const codes = String(query.codes || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 80);
   if (!codes.length) { sendJsonOrJsonp(req, res, query, 400, { ok: false, error: "缺少codes" }); return; }
+  const debug = query.debug === "1";
+  const diag = debug ? {} : null;
   const now = Date.now();
   const data = {};
   const need = [];
@@ -811,20 +865,36 @@ async function handleMini(req, res, query) {
     if (hit && now - hit.ts < MINI_TTL) { if (hit.payload) data[c] = hit.payload; }
     else need.push(c);
   });
-  if (need.length) {
+
+  // 非交易时段不打上游（缓存有当日旧数据也照常返回）
+  const trading = inTradingHours();
+  if (need.length && trading) {
     try {
-      const rs = await mapLimit(need, 6, async (c) => {
-        try { return [c, await fetchMiniOne(c)]; } catch (_) { return [c, null]; }
+      const rs = await mapLimit(need, 3, async (c) => {
+        try { return [c, await fetchMiniOne(c, diag)]; } catch (_) { return [c, null]; }
       });
       rs.forEach(([c, v]) => {
-        MINI_CACHE.set(c, { ts: Date.now(), payload: v });
-        if (v) data[c] = v;
+        const prev = MINI_CACHE.get(c);
+        const today = beijingNow().toISOString().slice(0, 10);
+        if (v) {
+          MINI_CACHE.set(c, { ts: Date.now(), payload: v, day: today });
+        } else if (prev && prev.payload && prev.day === today && now - prev.ts < MINI_STALE_OK) {
+          // 三源全挂：5 分钟内的当日旧数据兜底（比空白好），并缩短其有效期尽快重试
+          MINI_CACHE.set(c, { ts: Date.now() - MINI_TTL + 5000, payload: prev.payload, day: prev.day });
+          if (diag) diag[c] += "|stale";
+        } else {
+          MINI_CACHE.set(c, { ts: Date.now(), payload: null, day: today });
+        }
+        const cur = MINI_CACHE.get(c);
+        if (cur.payload) data[c] = cur.payload;
       });
     } catch (e) {
       console.error("[/api/mini]", e.message);
     }
   }
-  sendJsonOrJsonp(req, res, query, 200, { ok: true, data });
+  const out = { ok: true, data };
+  if (diag) { out.diag = diag; out.trading = trading; }
+  sendJsonOrJsonp(req, res, query, 200, out);
 }
 
 // ============================================================

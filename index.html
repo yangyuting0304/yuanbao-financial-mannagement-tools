@@ -3521,7 +3521,7 @@ function startTimer() {
   timer = setInterval(refresh, CFG.refreshMs);
   refresh();
   if (sparkTimer) clearInterval(sparkTimer);
-  sparkTimer = setInterval(fetchSparklines, 30000);
+  sparkTimer = setInterval(fetchSparklines, 60000);   // 60s：分钟数据粒度即 1 分钟，且给上游减负
   fetchSparklines();
 }
 
