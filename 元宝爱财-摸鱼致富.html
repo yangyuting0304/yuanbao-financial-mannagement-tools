@@ -12,6 +12,23 @@
 <meta property="og:image:width" content="600">
 <meta property="og:image:height" content="600">
 <title>元宝爱财 · 摸鱼盯盘</title>
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" id="metaThemeColor">
+<script>
+/* 主题预置：必须在样式表之前同步执行，否则深色用户会先闪一下白底。
+   规则：localStorage 手动选择 > 系统偏好；都没有则跟随系统。 */
+(function () {
+  var KEY = 'moyu_theme_v1';
+  var t = null;
+  try { t = localStorage.getItem(KEY); } catch (e) { t = null; }
+  if (t !== 'light' && t !== 'dark') {
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+  var m = document.getElementById('metaThemeColor');
+  if (m) m.setAttribute('content', t === 'dark' ? '#131316' : '#FFFFFF');
+})();
+</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -41,6 +58,42 @@
     /* ===== 字体 ===== */
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
     --font-num: var(--font-sans);
+    /* ===== 语义补充 token（原先是散落的硬编码色，统一收敛以便深色覆盖）===== */
+    --row-border: #E5E5E5;  /* 主容器外描边 */
+    --img-bg: #FFFFFF;/* 头像加载前占位底 */
+    --del: #D94545;         /* 删除按钮红 */
+    --del-soft: rgba(217,69,69,0.06);
+    --hover-2: #E5E5EA;     /* 次级按钮 hover 底（cancel） */
+    --hint-bg: rgba(242,242,247,0.92); /* 图区遮罩提示条底 */
+    --idx: #BBBBBB;         /* 自选列表序号灰 */
+  }
+
+  /* ===== 深色主题：仅覆盖变量，不写任何选择器，全站自动生效 ===== */
+  html[data-theme="dark"] {
+    --bg: #131316;         /* 页面底 */
+    --panel: #1E1E21;      /* 卡片/行/弹窗面 */
+    --txt: #E8E8EA;        /* 主文字 */
+    --sub: #98989F;        /* 副文字/代码 */
+    --sep: #2C2C30;        /* 分隔线 */
+    --hover: #26262A;      /* 行 hover 底 */
+    --up: #F2555A;         /* 涨红：深底提亮，避免暗红糊成一团 */
+    --down: #A8A8AE;       /* 跌：浅色用深灰"不扎眼"，深色需提亮到中灰才可读 */
+    --alert-up: #F2555A;   /* 提醒涨红 */
+    --alert-down: #3FBF63; /* 提醒跌绿 */
+    --flat: #98989F;       /* 平盘灰 */
+    --accent: #D9A03C;         /* 金色在深底上提亮 */
+    --accent-soft: rgba(217,160,60,0.14);
+    --accent-dark: #B8842C;
+    --border: #2C2C30;
+    --shadow: 0 1px 3px rgba(0,0,0,0.5);
+    /* 语义补充 token 的深色值 */
+    --row-border: #2C2C30;
+    --img-bg: #26262A;
+    --del: #F2555A;
+    --del-soft: rgba(242,85,90,0.12);
+    --hover-2: #33333A;
+    --hint-bg: rgba(19,19,22,0.92);
+    --idx: #6E6E76;
   }
   html, body {
     background: var(--bg);
@@ -69,7 +122,7 @@
     border-radius: 14px;
     overflow: hidden;
     box-shadow: var(--shadow);
-    border: 1px solid #E5E5E5;
+    border: 1px solid var(--row-border);
     background: var(--panel);
     position: relative;
     display: flex; flex-direction: column;
@@ -128,7 +181,7 @@
     object-fit: cover;
     border: 1.5px solid var(--border);
     flex: 0 0 auto;
-    background: #fff;
+    background: var(--img-bg);
     transition: transform 0.2s ease;
   }
   #bar .avatar:hover { transform: scale(1.06); }
@@ -181,6 +234,8 @@
   }
   /* 线性 SVG 图标（描边随 currentColor，统一扁平风格） */
   .ic { width: 16px; height: 16px; display: block; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* 主题按钮图标：CSS 的 stroke-width 会覆盖 SVG 属性，需用选择器提权才能生效 */
+  #btnTheme .ic { stroke-width: 1.8; }
 
   /* ===== 内容区（独立滚动） ===== */
   #body {
@@ -264,7 +319,7 @@
   .row .del-btn {
     position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
     width: 16px; height: 16px; border-radius: 50%;
-    border: none; background: rgba(217,69,69,0.06); color: #D94545;
+    border: none; background: var(--del-soft); color: var(--del);
     font-size: 11px; font-weight: 700; line-height: 1; cursor: pointer;
     display: none; align-items: center; justify-content: center;
     opacity: 0.45; transition: all 0.15s ease;
@@ -282,7 +337,7 @@
   #app.watch-edit .row .del-btn { display: flex; }
   #app.watch-edit .row:hover .del-btn { opacity: 0.9; }
   .row .del-btn:hover {
-    background: #D94545; color: #fff; opacity: 1;
+    background: var(--del); color: #fff; opacity: 1;
     transform: translateY(-50%) scale(1.18);
   }
   /* 拖拽状态 */
@@ -441,7 +496,7 @@
   }
   .save:hover { transform: translateY(-1px); box-shadow: 0 2px 8px var(--shadow); }
   .cancel { background: var(--hover); color: var(--sub); }
-  .cancel:hover { background: #E5E5EA; }
+  .cancel:hover { background: var(--hover-2); }
   .msg { color: var(--up); font-size: 11px; min-height: 14px; }
 
   /* 自选股：名称/代码搜索添加 */
@@ -606,7 +661,7 @@
     width: 48px; height: 48px; border-radius: 50%;
     border: 1.5px solid var(--border);
     object-fit: cover; flex-shrink: 0;
-    background: #fff;
+    background: var(--img-bg);
   }
   .modal-header-main {
     flex: 1; min-width: 0;
@@ -701,7 +756,7 @@
     position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
     text-align: center; font-size: 12px; font-weight: 600;
     color: var(--sub);
-    background: rgba(242,242,247,0.92);
+    background: var(--hint-bg);
     padding: 4px 10px;
     margin: 0 auto;
     width: max-content; max-width: calc(100% - 24px);
@@ -844,6 +899,7 @@
     </div>
     <span class="clock" id="clock">--:--:--</span>
     <button class="btn-fish" id="btnFish" title="摸鱼模式：弹出独立小窗盯盘（保留全部内容）；默认窗口置顶；点击后主窗数据收起">摸鱼模式</button>
+    <button class="btn" id="btnTheme" title="切换到深色主题" aria-label="切换到深色主题"><svg class="ic" id="btnThemeIcon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     <button class="btn" id="btnRefresh" title="刷新" aria-label="刷新"><svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
     <button class="btn" id="btnMin" title="折叠" aria-label="折叠"><svg class="ic" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     <button class="btn" id="btnSet" title="设置" aria-label="设置"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -3536,6 +3592,54 @@ setInterval(tickClock, 1000); tickClock();
 /* ===================== 交互 ===================== */
 document.getElementById("btnRefresh").onclick = refresh;
 
+/* ===================== 深色/浅色主题切换 ===================== */
+var THEME_KEY = "moyu_theme_v1";
+/* 月牙=切到深色；太阳=切到浅色。均为内联 SVG 描边图标，跟随 currentColor */
+var ICON_MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+var ICON_SUN = '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.2v2.1"/><path d="M12 19.7v2.1"/><path d="M4.5 4.5l1.5 1.5"/><path d="M18 18l1.5 1.5"/><path d="M2.2 12h2.1"/><path d="M19.7 12h2.1"/><path d="M4.5 19.5L6 18"/><path d="M18 6l1.5-1.5"/>';
+var btnTheme = document.getElementById("btnTheme");
+var btnThemeIcon = document.getElementById("btnThemeIcon");
+var metaThemeColor = document.getElementById("metaThemeColor");
+
+/* 手动选择过就不再跟随系统（localStorage 有值即视为手动） */
+function themeHasUserChoice() {
+  try {
+    var v = localStorage.getItem(THEME_KEY);
+    return v === "light" || v === "dark";
+  } catch (e) { return false; }
+}
+
+function applyTheme(t, persist) {
+  document.documentElement.setAttribute("data-theme", t);
+  if (persist) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} }
+  if (btnThemeIcon) btnThemeIcon.innerHTML = (t === "dark") ? ICON_SUN : ICON_MOON;
+  if (btnTheme) {
+    var label = (t === "dark") ? "切换到浅色主题" : "切换到深色主题";
+    btnTheme.title = label;
+    btnTheme.setAttribute("aria-label", label);
+  }
+  if (metaThemeColor) metaThemeColor.setAttribute("content", t === "dark" ? "#131316" : "#FFFFFF");
+}
+
+if (btnTheme) {
+  /* 初始化：与 head 内联脚本结论一致，这里只补图标/文案/meta，不重复写 localStorage */
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light", false);
+  btnTheme.onclick = function () {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark", true);
+  };
+}
+
+/* 跟随系统：仅在用户从未手动选择时生效；一旦手动点过按钮即取消跟随 */
+if (window.matchMedia) {
+  var mq = window.matchMedia("(prefers-color-scheme: dark)");
+  var onSchemeChange = function (e) {
+    if (themeHasUserChoice()) return;
+    applyTheme(e.matches ? "dark" : "light", false);
+  };
+  if (mq.addEventListener) mq.addEventListener("change", onSchemeChange);
+  else if (mq.addListener) mq.addListener(onSchemeChange);
+}
+
 /* 摸鱼模式：点击弹出独立小窗（?popup=1，保留全部内容）；默认窗口置顶见下方 keepOnTop；点击后主窗数据收起 */
 document.getElementById("btnFish").onclick = function () {
   // 用 URL 对象规范化：去掉 hash、确保 popup=1 只出现一次（修复重复叠加）
@@ -3677,7 +3781,7 @@ function renderWatchPreview() {
   el.innerHTML = CFG.watch.map((w, i) =>
     '<div class="w-item">' +
       '<span><span class="wi-name">' + w.name + '</span> <span class="wi-code">' + w.code + '</span></span>' +
-      '<span style="color:#BBBBBB;font-size:11px;">#' + (i + 1) + '</span>' +
+      '<span style="color:var(--idx);font-size:11px;">#' + (i + 1) + '</span>' +
     '</div>'
   ).join("");
 }
